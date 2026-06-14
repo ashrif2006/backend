@@ -106,4 +106,83 @@ const removeLogo = async (req, res) => {
   }
 };
 
-module.exports = { uploadLogo, removeLogo };
+
+const getStoreProfile = async (req, res) => {
+  try{
+    const { storeId } = req.user;
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+    });
+
+    if(!store){
+      return res.status(404).json({ message: "Store not found" });
+    }
+    
+    res.json({ store });
+  }catch(error){
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+const updateStore = async (req, res) => {
+  try {
+    const { storeId } = req.user;
+    const { name, slug, whatsapp_number } = req.body;
+
+    if (slug) {
+      const existingStore = await prisma.store.findFirst({
+        where: { 
+          slug,
+          NOT: { id: storeId } 
+        },
+      });
+      if (existingStore) {
+        return res.status(400).json({ success: false, message: "This slug is already taken by another store" });
+      }
+    }
+
+    const updatedStore = await prisma.store.update({
+      where: { id: storeId },
+      data: {
+        name,
+        slug,
+        whatsapp_number,
+      },
+    });
+
+    res.json({ message: "Store updated successfully", store: updatedStore });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+ 
+const getPublicStore = async (req, res) => {
+  try {
+    const { slug } = req.params;  
+
+    const store = await prisma.store.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        logo_url: true,
+        whatsapp_number: true,
+        products: {
+          where: { is_available: true },
+          include: { images: true } 
+        }
+      }
+    });
+
+    if (!store) {
+      return res.status(404).json({ success: false, message: "Store not found" });
+    }
+
+    res.json({ success: true, store });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports  = { uploadLogo, removeLogo, getStoreProfile , updateStore, getPublicStore };
+ 
