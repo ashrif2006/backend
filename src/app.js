@@ -6,6 +6,10 @@ app.use(express.json());
 
 app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/store", require("./routes/store.routes"));
+app.use("/api/auth", require("./routes/auth.routes"));
+app.use("/api", require("./routes/store.routes"));
+app.use("/api", require("./routes/product.routes"));
+app.use("/api", require("./routes/order.routes"));
 
 // Global error handler — catches multer & other errors
 app.use((err, _req, res, _next) => {
@@ -19,5 +23,6 @@ app.use((err, _req, res, _next) => {
     return res.status(400).json({ message: err.message });
   }
 });
+
 
 module.exports = app;

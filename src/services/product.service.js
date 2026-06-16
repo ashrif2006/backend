@@ -1,0 +1,126 @@
+const prisma = require("./prisma");
+const { uploadFile, deleteFile } = require("../utils/supabaseStorage");
+
+const MAX_PRODUCTS = 15;
+const MAX_IMAGES = 3;
+
+const createProduct = async ({ storeId, body, files }) => {
+  const { name, price, description, stock, sale_price } = body;
+
+  const count = await prisma.product.count({ where: { storeId } });
+  if (count >= MAX_PRODUCTS) throw new Error(`الحد الأقصى ${MAX_PRODUCTS} منتج`);
+
+  if (files && files.length > MAX_IMAGES) throw new Error(`الحد الأقصى ${MAX_IMAGES} صور`);
+
+  const product = await prisma.product.create({
+    data: {
+      name,
+      price: parseFloat(price),
+      sale_price: sale_price ? parseFloat(sale_price) : undefined,
+      description,
+      stock: parseInt(stock),
+      storeId,
+    },
+  });
+
+  if (files && files.length > 0) {
+    const images = await Promise.all(
+      files.map((file, index) =>
+        uploadFile(file, "products").then((url) => ({
+          image_url: url,
+          sort_order: index,
+          productId: product.id,
+        }))
+      )
+    );
+    await prisma.productImage.createMany({ data: images });
+  }
+
+  return prisma.product.findUnique({
+    where: { id: product.id },
+    include: { images: { orderBy: { sort_order: "asc" } } },
+  });
+};
+
+const getMyProducts = async (storeId) => {
+  return prisma.product.findMany({
+    where: { storeId },
+    include: { images: { orderBy: { sort_order: "asc" } } },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+const updateProduct = async ({ productId, storeId, body }) => {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, storeId },
+  });
+  if (!product) throw new Error("المنتج مش موجود");
+
+  return prisma.product.update({
+    where: { id: productId },
+    data: {
+      name: body.name,
+      price: body.price ? parseFloat(body.price) : undefined,
+      sale_price: body.sale_price ? parseFloat(body.sale_price) : undefined,
+      description: body.description,
+      stock: body.stock ? parseInt(body.stock) : undefined,
+      is_available: body.is_available !== undefined ? body.is_available : undefined,
+    },
+    include: { images: { orderBy: { sort_order: "asc" } } },
+  });
+};
+
+const deleteProduct = async ({ productId, storeId }) => {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, storeId },
+    include: { images: true },
+  });
+  if (!product) throw new Error("المنتج مش موجود");
+
+  // امسح الصور من Supabase
+  await Promise.all(product.images.map((img) => deleteFile(img.image_url)));
+
+  await prisma.product.delete({ where: { id: productId } });
+  return { message: "اتمسح" };
+};
+
+// Customer
+const getStoreProducts = async (slug) => {
+  const store = await prisma.store.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      name: true,
+      logo_url: true,
+      whatsapp_number: true,
+      products: {
+        where: { is_available: true },
+        include: { images: { orderBy: { sort_order: "asc" } } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+  if (!store) throw new Error("المتجر مش موجود");
+  return store;
+};
+
+const getProductById = async ({ slug, productId }) => {
+  const store = await prisma.store.findUnique({ where: { slug } });
+  if (!store) throw new Error("المتجر مش موجود");
+
+  const product = await prisma.product.findFirst({
+    where: { id: productId, storeId: store.id, is_available: true },
+    include: { images: { orderBy: { sort_order: "asc" } } },
+  });
+  if (!product) throw new Error("المنتج مش موجود");
+  return product;
+};
+
+module.exports = {
+  createProduct,
+  getMyProducts,
+  updateProduct,
+  deleteProduct,
+  getStoreProducts,
+  getProductById,
+};
