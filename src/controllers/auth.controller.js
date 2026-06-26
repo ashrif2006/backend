@@ -64,7 +64,7 @@ const login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
-
+  
     res.json({ token });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -77,10 +77,34 @@ const deleteProduct = async ({ productId, storeId }) => {
   });
   if (!product) throw new Error("المنتج مش موجود");
 
-  // امسح الصور من Supabase
-  await Promise.all(product.images.map((img) => deleteFile(img.image_url)));
+  const activeOrdersCount = await prisma.orderItem.count({
+    where: {
+      productId: productId,
+      order: {
+        status: {
+          notIn: ["DELIVERED", "CANCELLED"],
+        },
+      },
+    },
+  });
+  
+  if (activeOrdersCount > 0) {
+    throw new Error("لا يمكن حذف المنتج، يوجد أوردرات نشطة معلقة عليه حالياً"); // ضبطت الجملة "لا يمكن"
+  }
 
+  // 2. الخطوة السحرية الناقصة: امسح الروابط القديمة من جدول الـ OrderItem الأول
+  await prisma.orderItem.deleteMany({
+    where: { productId: productId }
+  });
+
+  // 3. امسح الصور من Supabase
+  if (product.images && product.images.length > 0) {
+    await Promise.all(product.images.map((img) => deleteFile(img.image_url)));
+  }
+
+  // 4. امسح المنتج نفسه نهائياً من جدول الـ Product
   await prisma.product.delete({ where: { id: productId } });
+  
   return { message: "اتمسح" };
 };
 
