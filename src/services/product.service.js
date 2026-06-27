@@ -7,39 +7,67 @@ const MAX_IMAGES = 3;
 const createProduct = async ({ storeId, body, files }) => {
   const { name, price, description, stock, sale_price } = body;
 
+  // 1. التأكد من الحد الأقصى للمنتجات
   const count = await prisma.product.count({ where: { storeId } });
   if (count >= MAX_PRODUCTS) throw new Error(`الحد الأقصى ${MAX_PRODUCTS} منتج`);
 
   if (files && files.length > MAX_IMAGES) throw new Error(`الحد الأقصى ${MAX_IMAGES} صور`);
 
-  const product = await prisma.product.create({
-    data: {
-      name,
-      price: parseFloat(price),
-      sale_price: sale_price ? parseFloat(sale_price) : undefined,
-      description,
-      stock: parseInt(stock),
-      storeId,
-    },
-  });
+  const uploadedImageUrls = [];
 
-  if (files && files.length > 0) {
-    const images = await Promise.all(
-      files.map((file, index) =>
-        uploadFile(file, "products").then((url) => ({
+  try {
+    // 2. رفع الصور لـ Supabase أولاً (ورا بعض لضمان الاستقرار الشديد)
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const url = await uploadFile(file, "products");
+        uploadedImageUrls.push(url);
+      }
+    }
+
+    // 3. هنا بقى السحر: فتح Transaction في Prisma (يا كلو ينجح يا كلو يفشل)
+    const result = await prisma.$transaction(async (tx) => {
+      // أ) تكريت المنتج
+      const product = await tx.product.create({
+        data: {
+          name,
+          price: parseFloat(price),
+          sale_price: sale_price ? parseFloat(sale_price) : undefined,
+          description,
+          stock: parseInt(stock),
+          storeId,
+        },
+      });
+
+      // ب) تجهيز وتكريت روابط الصور لو موجودة
+      if (uploadedImageUrls.length > 0) {
+        const imageRecords = uploadedImageUrls.map((url, index) => ({
           image_url: url,
           sort_order: index,
           productId: product.id,
-        }))
-      )
-    );
-    await prisma.productImage.createMany({ data: images });
-  }
+        }));
 
-  return prisma.product.findUnique({
-    where: { id: product.id },
-    include: { images: { orderBy: { sort_order: "asc" } } },
-  });
+        await tx.productImage.createMany({ data: imageRecords });
+      }
+
+      // ج) رجع المنتج كامل بالصور بتاعته من جوة الـ transaction
+      return tx.product.findUnique({
+        where: { id: product.id },
+        include: { images: { orderBy: { sort_order: "asc" } } },
+      });
+    });
+
+    return result;
+
+  } catch (error) {
+
+    console.error(" فشلت العملية، جاري التراجع وحذف الصور المعلقة:", error.message);
+    
+    if (uploadedImageUrls.length > 0) {
+      await Promise.all(uploadedImageUrls.map((url) => deleteFile(url).catch(() => null)));
+    }
+
+    throw new Error(error.message || "فشلت عملية إنشاء المنتج بالكامل");
+  }
 };
 
 const getMyProducts = async (storeId) => {
