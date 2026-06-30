@@ -48,7 +48,7 @@ const createOrder = async ({ slug, body }) => {
   });
 
 if (store.telegram_chat_id) {
-    sendOrderNotification(store.telegram_chat_id, order);
+    await sendOrderNotification(store.telegram_chat_id, order);
   }
 
 
