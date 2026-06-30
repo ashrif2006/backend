@@ -1,4 +1,5 @@
 const prisma = require("./prisma");
+const {sendOrderNotification} = require('./telegram.service.js')
 
 const createOrder = async ({ slug, body }) => {
   const { customer_name, customer_phone, customer_address, notes, items } =
@@ -46,16 +47,21 @@ const createOrder = async ({ slug, body }) => {
     },
   });
 
-  // WhatsApp URL
-  let whatsapp_url = null;
-  if (store.whatsapp_number) {
-    const msg = `مرحباً ${customer_name}! ✅\nتم استلام طلبك من ${store.name}\nرقم الطلب: #${order.id.slice(0, 8)}\nالإجمالي: ${totalPrice} جنيه\nالدفع: كاش عند الاستلام 💵`;
-    whatsapp_url = `https://wa.me/${store.whatsapp_number}?text=${encodeURIComponent(msg)}`;
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { whatsapp_sent: true },
-    });
+if (store.telegram_chat_id) {
+    sendOrderNotification(store.telegram_chat_id, order);
   }
+
+
+  // // WhatsApp URL
+  // let whatsapp_url = null;
+  // if (store.whatsapp_number) {
+  //   const msg = `مرحباً ${customer_name}! ✅\nتم استلام طلبك من ${store.name}\nرقم الطلب: #${order.id.slice(0, 8)}\nالإجمالي: ${totalPrice} جنيه\nالدفع: كاش عند الاستلام 💵`;
+  //   whatsapp_url = `https://wa.me/${store.whatsapp_number}?text=${encodeURIComponent(msg)}`;
+  //   await prisma.order.update({
+  //     where: { id: order.id },
+  //     data: { whatsapp_sent: true },
+  //   });
+  // }
 
   return { ...order, whatsapp_url };
 };
