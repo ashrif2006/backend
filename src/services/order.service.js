@@ -52,16 +52,16 @@ if (store.telegram_chat_id) {
   }
 
 
-  // // WhatsApp URL
-  // let whatsapp_url = null;
-  // if (store.whatsapp_number) {
-  //   const msg = `مرحباً ${customer_name}! ✅\nتم استلام طلبك من ${store.name}\nرقم الطلب: #${order.id.slice(0, 8)}\nالإجمالي: ${totalPrice} جنيه\nالدفع: كاش عند الاستلام 💵`;
-  //   whatsapp_url = `https://wa.me/${store.whatsapp_number}?text=${encodeURIComponent(msg)}`;
-  //   await prisma.order.update({
-  //     where: { id: order.id },
-  //     data: { whatsapp_sent: true },
-  //   });
-  // }
+  // WhatsApp URL
+  let whatsapp_url = null;
+  if (store.whatsapp_number) {
+    const msg = `مرحباً ${customer_name}! ✅\nتم استلام طلبك من ${store.name}\nرقم الطلب: #${order.id.slice(0, 8)}\nالإجمالي: ${totalPrice} جنيه\nالدفع: كاش عند الاستلام 💵`;
+    whatsapp_url = `https://wa.me/${store.whatsapp_number}?text=${encodeURIComponent(msg)}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { whatsapp_sent: true },
+    });
+  }
 
   return { ...order, whatsapp_url };
 };
